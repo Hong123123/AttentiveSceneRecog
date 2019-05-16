@@ -1,6 +1,6 @@
 # Basic configuration
 # >>>
-root = '/mnt/old_hexin/AttentiveScenery'
+root = '/mnt/old_hexin/AttentiveSceneReco'
 log_root = '/mnt/old_hexin/log_atten'
 places_alex = root + '/models/ckpt/alexnet_places365.pth.tar'
 # <<<

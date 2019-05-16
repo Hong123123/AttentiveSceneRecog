@@ -33,6 +33,12 @@ rgb_trans = trans.Compose([
         trans.Normalize([.485, .456, .406], [.229, .224, .225])
     ])
 
+rgb_test = trans.Compose([
+        trans.Resize((224,224)),
+        trans.ToTensor(),
+        trans.Normalize([.485, .456, .406], [.229, .224, .225])
+    ])
+
 depth_trans = trans.Compose([
         trans.Resize((256,256)),
         trans.RandomCrop(224),
@@ -52,5 +58,11 @@ train_transform = [
 train_transform_hha = [
     rgb_trans,
     rgb_trans,
+    lambda x: torch.tensor(x, dtype=torch.long)
+]
+
+test_transform_hha = [
+    rgb_test,
+    rgb_test,
     lambda x: torch.tensor(x, dtype=torch.long)
 ]

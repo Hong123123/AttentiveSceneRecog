@@ -28,10 +28,13 @@ def get_parameters():
     # hyper parameter
     parser.add_argument('--log_root', type=str, default=None)
     parser.add_argument('--epochs', type=int, default=100)
-    parser.add_argument('--pretrain_dir', type=str, default=None)
-    parser.add_argument('--ckpt_dir', type=str, default=None)
 
-    parser.add_argument('--no_atten', type=str, default='False')
+    parser.add_argument('--pretrain_dir', type=str, default=None)
+    parser.add_argument('--baseline_dir', type=str, default=None)
+    parser.add_argument('--ckpt_dir', type=str, default=None)
+    parser.add_argument('--raw_atten_no_relu_dir', type=str, default=None)
+
+    parser.add_argument('--atten_type', type=str, default=None)
 
     # system params
     parser.add_argument('--split', type=str, default='train')
@@ -51,9 +54,13 @@ def get_parameters():
     # integrity check
     if args.save_inteval_epoch:
         args.save_inteval_epoch = args.eval_inteval_epoch
-    if args.pretrain_dir:
-        if args.ckpt_dir:
-            raise ValueError('--pretrain_dir and --ckpt_dir can\'t be present at the same time.')
+
+    if bool(args.pretrain_dir) + bool(args.baseline_dir) + bool(args.ckpt_dir) + bool(args.raw_atten_no_relu_dir) > 1:
+        raise ValueError('multiple dirs can\'t be present at the same time.')
+
+    if args.atten_type:
+        if args.atten_type not in ['raw', 'multi']:
+            raise ValueError('Unexpected --atten_type value')
 
     return args
 

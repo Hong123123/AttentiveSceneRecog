@@ -1,8 +1,8 @@
 # from dataset.sunrgbd_dataset import SunRgbdDataset
 from dataset.nyud2_dataset import NYUD2Dataset
-from dataset.transforms import train_transform_hha as tr_hha
+from dataset.transforms import train_transform_hha as tr_hha, test_transform_hha as te_hha
 # from models.Atten_alex import AttenAlex
-from models.origin_alex import DAlex
+from models.dynamic_alex import DAlex
 import config
 import torch
 from torch.utils.data import DataLoader
@@ -18,7 +18,7 @@ def load_pretrain_both_branch(model, pretrain_dir, device):
     pre_ckpt = torch.load(pretrain_dir, map_location=device)
 
     # load weight manually
-    # rather than model.load_state_dict(state_dict)
+    # rather than model.load_state_dict(state_dict)3j
     conv_idxmap = model.where_convs
     key1 = None
     key2 = None
@@ -95,17 +95,18 @@ def main(args):
 
     # setup dataset
     phases = ['train', 'val', 'test']
+    trans = tr_hha, te_hha, te_hha
     sun_data_args = [
         (
-            (config.sunrgbd_dir, config.sunrgbd_label_dict_dir), dict(phase=phase, hha_mode=True, transform=tr_hha)
+            (config.sunrgbd_dir, config.sunrgbd_label_dict_dir), dict(phase=phase, hha_mode=True, transform=tran)
         )
-        for phase in phases
+        for phase, tran in zip(phases, trans)
     ]
     nyudv2_data_args = [
         (
-            (config.nyud2_dir,), dict(phase=phase, hha_mode=True, transform=tr_hha)
+            (config.nyud2_dir,), dict(phase=phase, hha_mode=True, transform=tran)
         )
-        for phase in phases
+        for phase, tran in zip(phases, trans)
     ]
 
     # dataset = SunRgbdDataset
@@ -114,9 +115,9 @@ def main(args):
     data_args = nyudv2_data_args
 
     train_data, val_data, test_data = [dataset(*d_arg[0], **d_arg[1]) for d_arg in data_args]
-    train_loader = DataLoader(train_data, batch_size=20, shuffle=True, num_workers=5, drop_last=False)
-    val_loader = DataLoader(val_data, batch_size=20, shuffle=False, num_workers=5, drop_last=False)
-    test_loader = DataLoader(test_data, batch_size=20, shuffle=False, num_workers=5, drop_last=False)
+    train_loader = DataLoader(train_data, batch_size=125, shuffle=True, num_workers=5, drop_last=False)
+    val_loader = DataLoader(val_data, batch_size=1, shuffle=False, num_workers=5, drop_last=False)
+    test_loader = DataLoader(test_data, batch_size=1, shuffle=False, num_workers=5, drop_last=False)
     classes = train_data.classes
     cls_weight = train_data.cls_weight
 

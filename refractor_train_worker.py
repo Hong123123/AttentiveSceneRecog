@@ -114,7 +114,7 @@ def main(args):
                     log_root,
                     log_folder,
 
-                    save=True,
+                    save_regular=True,
                     save_best=True,
                     debug_mode=True,
                     debug_batch=2,

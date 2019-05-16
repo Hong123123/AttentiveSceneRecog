@@ -7,7 +7,8 @@ class Worker():
                  epochs, epoch_offset, step_offset,
                  train_loader, val_loader, test_loader,
                  device, writer, log_root, log_folder, best_prec1=0,
-                 save=True,
+                 save_regular=True,
+                 save_first=True,
                  save_best=True,
                  debug_mode=False,
                  debug_batch=5):
@@ -15,8 +16,8 @@ class Worker():
         self.epochs = epochs
         self.epoch_offset = epoch_offset
         self.step_offset = step_offset
-        self.abs_epoch = -1
-        self.abs_step = -1
+        self.abs_epoch = epoch_offset - 1
+        self.abs_step = step_offset - 1
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.test_loader = test_loader
@@ -30,7 +31,8 @@ class Worker():
         self.log_folder = log_folder
         self.log_root = log_root
 
-        self.save = save
+        self.save_regular = save_regular
+        self.save_first=save_first
         self.save_best = save_best
         self.debug_mode = debug_mode
         self.debug_batch = debug_batch
@@ -48,8 +50,9 @@ class Worker():
             if self.debug_mode:
                 if step+1 > self.debug_batch:
                     break
-            self.abs_step = step + self.step_offset
-            self.step_offset = self.abs_step + 1
+            self.abs_step += 1
+            # self.step_offset += 1
+            # assert self.abs_step == step + self.step_offset
 
             rgb, depth, label = batch['rgb'].to(self.device), batch['depth'].to(self.device), batch['label'].to(
                 self.device)
@@ -73,13 +76,14 @@ class Worker():
             self.optimizer.step()
 
             if if_log:
-                print('running at step {}'.format(step))
-                print('logging at step {}'.format(self.abs_step))
                 self.writer.add_scalar('Train/Running_Loss(steps)', loss.item(), self.abs_step)
                 self.writer.add_scalar('Train/Running_Accu(steps)', float(accu.item()) / batch_size, self.abs_step)
                 # self.writer.add_scalar('Train/Sanity of wz',
                 #                        float(torch.sum(torch.abs(self.model.attens[0][0].Wz[0].weight.flatten())).item()),
                 #                        self.abs_step)
+        else:
+            # print('running at step {}'.format(step))
+            print('{} steps trained'.format(self.abs_step))
 
         return running_loss, running_acc, num_images
 
@@ -101,12 +105,13 @@ class Worker():
                     self.device)
 
                 o = self.model(rgb, depth)
-
+                correct = torch.argmax(o, dim=1) == label
+                correct_num = torch.sum(correct).item()
                 val_num += rgb.size(0)
-                running_val_acc += torch.sum(
-                    torch.argmax(o, dim=1) == label
-                ).item()
+                running_val_acc += correct_num
+
         val_acc = running_val_acc / val_num
+        print(val_acc)
 
         is_best = val_acc >= self.best_prec1
         self.best_prec1 = val_acc if is_best else self.best_prec1
@@ -141,20 +146,29 @@ class Worker():
             print('saving best model at epoch: {}'.format(self.abs_epoch))
             best_dir = self.log_root + '/{}/checkpoints/best'.format(self.log_folder)
             save_name = '/val_acc_of_{}_at_epoch:{}.ckpt'.format(val_acc, self.abs_epoch)
-            save_helper(ckpt, best_dir, save_name, maxnum=3)
+            save_helper(ckpt, best_dir, save_name, maxnum=5)
 
-        if not self.save:
+        if not self.save_regular:
             return
 
         # if is_save:
         print('saving at epoch: {}'.format(self.abs_epoch))
         save_dir = self.log_root + '/{}/checkpoints'.format(self.log_folder)
         save_name = '/val_acc_of_{}_at_epoch:{}.ckpt'.format(val_acc, self.abs_epoch)
-        save_helper(ckpt, save_dir, save_name, maxnum=1)
+        save_helper(ckpt, save_dir, save_name, maxnum=2)
 
     def work(self):
+        # initial validate
+        val_acc, is_best = self.validate(self.val_loader)
+        print('val_acc: {}, is_best: {}'.format(val_acc, is_best))
+        # save
+        if self.save_first:
+            self.save_switch(val_acc, is_best)
+
         for epoch in range(self.epochs):
-            self.abs_epoch = epoch + self.epoch_offset
+            self.abs_epoch += 1
+            # self.epoch_offset += 1
+            assert epoch + self.epoch_offset == self.abs_epoch
             # total_num_step=0
 
             # train
@@ -175,5 +189,6 @@ class Worker():
 
         # test
         test_acc, _ = self.validate(self.test_loader, mode='Test')
+        print('test accuracy', test_acc)
         return test_acc
 

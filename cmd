@@ -52,17 +52,36 @@ best ckpt:
 
 --no_atten false --lr 3e-4 --l2 0.5 --log_root /home/hong/small_log_atten/nyudv2 --epochs 10000 --pretrain_dir /mnt/pub_workspace_2T/hong_data/AttentiveScenery/models/ckpt/alexnet_places365.pth.tar --save_inteval_epoch 1 --device cuda:2
 
-# a baseline
+# startup baseline
 python work_full_adam_baseline.py --lr 3e-4 --l2 0.5 --log_root /home/hong/small_log_atten/nyudv2/baseline --epochs 10000 --pretrain_dir /mnt/pub_workspace_2T/hong_data/AttentiveScenery/models/ckpt/alexnet_places365.pth.tar --save_inteval_epoch 1 --device cuda:0
 
-# >>>> resume from above >>>>
-# >>> file: work_full_adam.py
---no_atten true --lr 3e-4 --l2 0.5 --log_root /home/hong/small_log_atten/nyudv2/no_atten --epochs 10000 --ckpt_dir /home/hong/small_log_atten/nyudv2/2019-05-07_16:48:14/checkpoints/val_acc_of_0.3302752293577982_at_epoch:1178.ckpt --save_inteval_epoch 1 --device cuda:2
+# >>>>
+# try fine-tune, from 0.54
+python work_full_freeze_baseline.py --lr 1e-30 --l2 0.5 --log_root /home/hong/small_log_atten/nyudv2/freeze_baseline --epochs 100000 --ckpt_dir /home/hong/small_log_atten/nyudv2/freeze_baseline/origin_2019-05-09_22:56:27/checkpoints/val_acc_of_0.5412844036697247_at_epoch:98.ckpt --save_inteval_epoch 1 --device cuda:2
 
-python work_full_adam.py --no_atten false --lr 3e-4 --l2 1 --log_root /home/hong/small_log_atten/nyudv2/has_atten --epochs 10000 --ckpt_dir /home/hong/small_log_atten/nyudv2/has_atten/2019-05-08_14:29:15/checkpoints/best/val_acc_of_0.41590214067278286_at_epoch:1992.ckpt --save_inteval_epoch 1 --device cuda:1
+# <<<<<
+
+# with atten
+python work_full_adam.py --no_atten false --lr 3e-4 --l2 10 --log_root /home/hong/small_log_atten/nyudv2/has_atten --epochs 10000 --ckpt_dir /home/hong/small_log_atten/nyudv2/has_atten/2019-05-09_15:58:13/checkpoints/best/val_acc_of_0.43425076452599387_at_epoch:6872.ckpt --save_inteval_epoch 1 --device cuda:1
 
 # a baseline
 # >>> file: work_full_adam_baseline.py
 python work_full_adam_baseline.py --lr 3e-4 --l2 0.5 --log_root /home/hong/small_log_atten/nyudv2/baseline --epochs 10000 --ckpt_dir /home/hong/small_log_atten/nyudv2/baseline/2019-05-07_21:14:04/checkpoints/val_acc_of_0.3654434250764526_at_epoch:95.ckpt --save_inteval_epoch 1 --device cuda:0
+
 # <<<<<<<<<<<<<<<<<
+
+# >>>> running >>>>
+# freeze baseline, origin
+python work_full_freeze_baseline.py --lr 3e-4 --l2 0.1 --log_root /home/hong/small_log_atten/nyudv2/freeze_baseline/debug --epochs 100000 --pretrain_dir /mnt/pub_workspace_2T/hong_data/AttentiveScenery/models/ckpt/alexnet_places365.pth.tar --save_inteval_epoch 1 --device cuda:2
+
+/home/hong/small_log_atten/nyudv2/freeze_baseline/origin_2019-05-09_22:56:27/checkpoints/best/val_acc_of_0.5871559633027523_at_epoch:30.ckpt
+
+# try fine-tune, from 0.59
+python work_full_freeze_baseline.py --lr 1e-30 --l2 0.1 --log_root /home/hong/small_log_atten/nyudv2/freeze_baseline --epochs 100000 --ckpt_dir /home/hong/small_log_atten/nyudv2/freeze_baseline/val_acc_of_0.5902140672782875_at_epoch:51.ckpt --save_inteval_epoch 1 --device cuda:2
+
+# fine-tunning! good, LR:1k~10k
+python work_full_freeze_baseline.py --lr 1e-10000 --l2 0.1 --log_root /home/hong/small_log_atten/nyudv2/freeze_baseline --epochs 100000 --ckpt_dir /home/hong/small_log_atten/nyudv2/freeze_baseline/val_acc_of_0.5978593272171254_at_epoch:111.ckpt --save_inteval_epoch 1 --device cuda:1
+
+# aggressive hageshii, useless
+python work_full_adam_baseline.py --lr 1e-100000000000000 --l2 0.1 --log_root /home/hong/small_log_atten/nyudv2/freeze_baseline --epochs 100000 --ckpt_dir /home/hong/small_log_atten/nyudv2/freeze_baseline/val_acc_of_0.5978593272171254_at_epoch:111.ckpt --save_inteval_epoch 1 --device cuda:0
 
