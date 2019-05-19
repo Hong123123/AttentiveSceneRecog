@@ -1,23 +1,27 @@
 import torch
 from torch import nn
-from models.Identity import Identity
+from models.basic_op import Identity, Zero
 
 
 # follow the notation of 'non-local neural networks'
 # https://arxiv.org/pdf/1711.07971v3.pdf
 # version 1: Qx, Kaux, Vx
 class AttentionV1(nn.Module):
-    def __init__(self, Cin, Cout=None, batch_norm=False, zero_z=False, freeze_z=False):
+    def __init__(self, Cin, Cout=None, batch_norm=False, zero_z=False, freeze_z=False, sliding_bottleneck=False):
         super(AttentionV1, self).__init__()
         if Cout is None:
             Cout = Cin
-        self.Wq = nn.Sequential(nn.Conv2d(Cin, Cout // 2, kernel_size=1, padding=0), nn.BatchNorm2d(Cout // 2)) if batch_norm else nn.Conv2d(Cin, Cout // 2, kernel_size=1, padding=0)
-        self.Wk = nn.Sequential(nn.Conv2d(Cin, Cout // 2, kernel_size=1, padding=0), nn.BatchNorm2d(Cout // 2)) if batch_norm else nn.Conv2d(Cin, Cout // 2, kernel_size=1, padding=0)
-        self.Wv = nn.Sequential(nn.Conv2d(Cin, Cout // 2, kernel_size=1, padding=0), nn.BatchNorm2d(Cout // 2)) if batch_norm else nn.Conv2d(Cin, Cout // 2, kernel_size=1, padding=0)
+        self.mid_C = Cout // 2 if not sliding_bottleneck else (Cout+Cin)//4
+        self.Wq = nn.Sequential(nn.Conv2d(Cin, self.mid_C, kernel_size=1, padding=0), nn.BatchNorm2d(self.mid_C))\
+            if batch_norm else nn.Conv2d(Cin, self.mid_C, kernel_size=1, padding=0)
+        self.Wk = nn.Sequential(nn.Conv2d(Cin, self.mid_C, kernel_size=1, padding=0), nn.BatchNorm2d(self.mid_C))\
+            if batch_norm else nn.Conv2d(Cin, self.mid_C, kernel_size=1, padding=0)
+        self.Wv = nn.Sequential(nn.Conv2d(Cin, self.mid_C, kernel_size=1, padding=0), nn.BatchNorm2d(self.mid_C))\
+            if batch_norm else nn.Conv2d(Cin, self.mid_C, kernel_size=1, padding=0)
         self.softmax = nn.Softmax(2)  # the batched column
 
-        self.Wz = nn.Sequential(nn.Conv2d(Cout // 2, Cout, kernel_size=1, padding=0), nn.BatchNorm2d(Cout)) \
-            if batch_norm else nn.Conv2d(Cout // 2, Cout, kernel_size=1, padding=0)
+        self.Wz = nn.Sequential(nn.Conv2d(self.mid_C, Cout, kernel_size=1, padding=0), nn.BatchNorm2d(Cout)) \
+            if batch_norm else nn.Conv2d(self.mid_C, Cout, kernel_size=1, padding=0)
 
         # without breaking pretrianed behavior
         self.zero_z = zero_z
@@ -39,20 +43,20 @@ class AttentionV1(nn.Module):
         # assert len(x.shape) == 4  # ensure shape like B,C,H,W
         # assert x.shape == q.shape  # same shape
 
-        B, C, H, W = x.shape
+        B, _, H, W = x.shape
 
         # extract q k v
         bq, bk, bv = self.Wq(x), self.Wk(aux), self.Wv(x)  # trick: can subsample k and v simultaneously in spatial dim
 
         # reshape
-        r = lambda x: x.view(B, C//2, -1)
+        r = lambda x: x.view(B, self.mid_C, -1)
         bq, bk, bv = r(bq), r(bk), r(bv)  # shape(B, C/2, Spatial), (B, C/2, Spatial'), (B, C/2, Spatial')
 
         # calculate attention
         KTQ = torch.bmm(bk.permute([0,2,1]), bq)  # KTQ means (K^T • Q) with shape(B, Spatial', Spatial)
         atten_map = self.softmax(KTQ)  # y = V • Softmax_column-wise(K^T • Q)
         y = torch.bmm(bv,atten_map)  # shape(B, C/2, Spatial)
-        y = y.view(B,C//2,H,W)
+        y = y.view(B, self.mid_C, H, W)
 
         z = self.Wz(y) + x
         return z
@@ -63,30 +67,41 @@ class AttentionV1(nn.Module):
 # batch norm only at Wz
 # x resizable
 class AttentionV2(nn.Module):
-    def __init__(self, Cin, Cout=None, batch_norm=False, zero_z=False, freeze_z=False, Wx_enabled=False):
+    def __init__(self, Cin, Cout=None,
+                 batch_norm=False, zero_z=False, freeze_z=False, Wx_enabled=False,
+                 sliding_bottleneck=False, residual=True):
         super(AttentionV2, self).__init__()
         if Cout is None:
             Cout = Cin
         if not Wx_enabled:
-            assert Cin == Cout
+            if Cout != Cin:
+                assert residual is False
+
+        self.residual = residual
+
+        self.mid_C = Cout // 2 if not sliding_bottleneck else (Cout + Cin) // 4
 
         self.Cin = Cin
         self.Cout = Cout
 
-        self.Wq = nn.Conv2d(Cin, Cout // 2, kernel_size=1, padding=0)
-        self.Wk = nn.Conv2d(Cin, Cout // 2, kernel_size=1, padding=0)
-        self.Wv = nn.Conv2d(Cin, Cout // 2, kernel_size=1, padding=0)
+        self.Wq = nn.Conv2d(Cin, self.mid_C, kernel_size=1, padding=0)
+        self.Wk = nn.Conv2d(Cin, self.mid_C, kernel_size=1, padding=0)
+        self.Wv = nn.Conv2d(Cin, self.mid_C, kernel_size=1, padding=0)
 
         self.softmax = nn.Softmax(2)  # the batched column
 
         self.Wz = nn.Sequential(
-            nn.Conv2d(Cout // 2, Cout, kernel_size=1, padding=0), nn.BatchNorm2d(Cout)
+            nn.Conv2d(self.mid_C, Cout, kernel_size=1, padding=0), nn.BatchNorm2d(Cout)
         ) \
-            if batch_norm else nn.Conv2d(Cout // 2, Cout, kernel_size=1, padding=0)
+            if batch_norm else nn.Conv2d(self.mid_C, Cout, kernel_size=1, padding=0)
 
-        self.Wx = nn.Conv2d(Cin, Cout, kernel_size=1, padding=0)
-        if not Wx_enabled:
+        # self.Wx = nn.Conv2d(Cin, Cout, kernel_size=1, padding=0)
+        if Wx_enabled:
+            self.Wx = nn.Conv2d(Cin, Cout, kernel_size=1, padding=0)
+        elif residual:
             self.Wx = Identity()
+        else:
+            self.Wx = Zero()
 
         # without breaking pretrianed behavior
         self.zero_z = zero_z
@@ -114,7 +129,7 @@ class AttentionV2(nn.Module):
         bq, bk, bv = self.Wq(x), self.Wk(aux), self.Wv(aux)  # trick: can subsample k and v simultaneously in spatial dim
 
         # reshape
-        r = lambda x: x.view(B, -1, H*W)
+        r = lambda x: x.view(B, self.mid_C, -1)
         bq, bk, bv = r(bq), r(bk), r(bv)  # shape(B, C/2, Spatial), (B, C/2, Spatial'), (B, C/2, Spatial')
 
         # calculate attention
