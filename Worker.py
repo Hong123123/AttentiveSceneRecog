@@ -3,15 +3,15 @@ import torch
 
 
 class Worker():
-    def __init__(self, model, optimizer, criterion,  # model params
+    def __init__(self, model, optimizer, lr_scheduler, criterion,  # model params
                  epochs, epoch_offset, step_offset,
                  train_loader, val_loader, test_loader,
                  device, writer, log_root, log_folder, best_prec1=0,
                  save_regular=True,
                  save_first=True,
                  save_best=True,
-                 debug_mode=False,
-                 debug_batch=5):
+                 save_num=2,
+                 save_best_num=5):
         self.model = model
         self.epochs = epochs
         self.epoch_offset = epoch_offset
@@ -24,6 +24,7 @@ class Worker():
         self.writer = writer
         self.device = device
         self.optimizer = optimizer
+        self.lr_scheduler = lr_scheduler
         self.criterion = criterion
         # self.eval_inteval_epoch = eval_inteval_epoch
         # self.save_inteval_epoch = save_inteval_epoch
@@ -34,8 +35,9 @@ class Worker():
         self.save_regular = save_regular
         self.save_first=save_first
         self.save_best = save_best
-        self.debug_mode = debug_mode
-        self.debug_batch = debug_batch
+
+        self.save_num = save_num
+        self.save_best_num = save_best_num
 
     def train(self, if_log=True):
         # Main loop config: https://discuss.pytorch.org/t/interpreting-loss-value/17665/4
@@ -47,12 +49,7 @@ class Worker():
         running_acc = 0
 
         for step, batch in enumerate(iter(self.train_loader)):
-            if self.debug_mode:
-                if step+1 > self.debug_batch:
-                    break
             self.abs_step += 1
-            # self.step_offset += 1
-            # assert self.abs_step == step + self.step_offset
 
             rgb, depth, label = batch['rgb'].to(self.device), batch['depth'].to(self.device), batch['label'].to(
                 self.device)
@@ -73,6 +70,8 @@ class Worker():
             # back-propagation
             self.optimizer.zero_grad()
             loss.backward()
+            if self.lr_scheduler:
+                self.lr_scheduler.step()
             self.optimizer.step()
 
             if if_log:
@@ -94,12 +93,6 @@ class Worker():
         running_val_acc = 0
         val_num = 0
         for step, batch in enumerate(iter(loader)):
-            if self.debug_mode:
-                if step+1 > self.debug_batch:
-                    break
-            # global test_N
-            # if step>5:  # testing code
-            #     break
             with torch.no_grad():
                 rgb, depth, label = batch['rgb'].to(self.device), batch['depth'].to(self.device), batch['label'].to(
                     self.device)
@@ -122,10 +115,6 @@ class Worker():
         return val_acc, is_best
 
     def save_switch(self, val_acc, is_best):
-        if self.debug_mode:
-            if val_acc < 0.8:
-                return
-
         state_dict = self.model.state_dict()
         arch = self.model._get_name()
 
@@ -139,14 +128,11 @@ class Worker():
             'optim': self.optimizer.state_dict(),
         }
 
-        if self.debug_mode:
-            ckpt['best_prec1'] = 0  # don't save this stats
-
         if is_best and self.save_best:
             print('saving best model at epoch: {}'.format(self.abs_epoch))
             best_dir = self.log_root + '/{}/checkpoints/best'.format(self.log_folder)
             save_name = '/val_acc_of_{}_at_epoch:{}.ckpt'.format(val_acc, self.abs_epoch)
-            save_helper(ckpt, best_dir, save_name, maxnum=5)
+            save_helper(ckpt, best_dir, save_name, maxnum=self.save_best_num)
 
         if not self.save_regular:
             return
@@ -155,7 +141,7 @@ class Worker():
         print('saving at epoch: {}'.format(self.abs_epoch))
         save_dir = self.log_root + '/{}/checkpoints'.format(self.log_folder)
         save_name = '/val_acc_of_{}_at_epoch:{}.ckpt'.format(val_acc, self.abs_epoch)
-        save_helper(ckpt, save_dir, save_name, maxnum=2)
+        save_helper(ckpt, save_dir, save_name, maxnum=self.save_num)
 
     def work(self):
         # initial validate

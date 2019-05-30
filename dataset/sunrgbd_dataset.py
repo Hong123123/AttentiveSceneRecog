@@ -4,6 +4,7 @@ import numpy as np
 import scipy.io
 import json
 import glob
+import config
 
 
 class SunRgbdDataset(Dataset):
@@ -22,11 +23,11 @@ class SunRgbdDataset(Dataset):
         self.hha_mode = hha_mode
 
         # pre-calculated stats:
-        self.total_len = 10335
-        self.alltest_len = 5050
-        # self.alltrain_len = 5285
-        self.train_len = 2666
-        self.val_len = 2619
+        self.total_len = 9504
+        self.alltest_len = 4659
+        # self.alltrain_len = 4845
+        self.train_len = 2393
+        self.val_len = 2452
 
         self.transform = transform
 
@@ -35,9 +36,11 @@ class SunRgbdDataset(Dataset):
         # self.split_dir = os.path.join(data_dir, 'SUNRGBDtoolbox/traintestSUNRGBD/allsplit.mat')
         self.split_redundancy = 24
         # self.dataset_name = '/SUNRGBD_HHA'
-        self.splits_dir = self.root_dir+'/SUNRGBDtoolbox/traintestSUNRGBD/allsplit.mat'
-        self.splits = scipy.io.loadmat(self.splits_dir, squeeze_me=True, struct_as_record=False)
-        self.all_split = [*self.splits['alltrain'], *self.splits['alltest']]
+        self.splits_dir = config.root + '/utility/sun_rgbd_meta/make_9504/total_split.json'
+        # self.splits = scipy.io.loadmat(self.splits_dir, squeeze_me=True, struct_as_record=False)
+        # self.all_split = [*self.splits['alltrain'], *self.splits['alltest']]
+        with open(self.splits_dir, 'r') as file:
+            self.splits = json.load(file)
 
         self.cls_dict_dir = label_dict_dir
         with open(self.cls_dict_dir, 'r') as j:
@@ -46,9 +49,8 @@ class SunRgbdDataset(Dataset):
         self.classes = list(self.cls_dict.keys())
         self.cls_weight = [sample_dict['frequency'] for scene, sample_dict in self.cls_dict.items()]
 
-
     def __len__(self):
-        if self.phase == 'train': # all train: no val
+        if self.phase == 'train':  # all train: no val
             return self.train_len
         elif self.phase == 'val':
             return self.val_len
@@ -63,21 +65,21 @@ class SunRgbdDataset(Dataset):
         if self.phase == 'train':
             # deal with filename with wildcard
             rgb_dir = glob.glob(self.dataset_dir +
-                                self.splits['trainvalsplit'].train[idx][self.split_redundancy:] + '/image/*')[0]
+                                self.splits['trainvalsplit']['train'][idx][self.split_redundancy:] + '/image/*')[0]
             # the inpainted depth:
             depth_dir = glob.glob(self.dataset_dir +
-                                  self.splits['trainvalsplit'].train[idx][self.split_redundancy:] + depth_mode + '/*')[0]
+                                  self.splits['trainvalsplit']['train'][idx][self.split_redundancy:] + depth_mode + '/*')[0]
             cls_dir = self.dataset_dir + \
-                      self.splits['trainvalsplit'].train[idx][self.split_redundancy:] + '/scene.txt'
+                      self.splits['trainvalsplit']['train'][idx][self.split_redundancy:] + '/scene.txt'
         elif self.phase == 'val':
             # deal with filename with wildcard
             rgb_dir = glob.glob(self.dataset_dir +
-                                self.splits['trainvalsplit'].val[idx][self.split_redundancy:] + '/image/*')[0]
+                                self.splits['trainvalsplit']['val'][idx][self.split_redundancy:] + '/image/*')[0]
             # the inpainted depth:
             depth_dir = glob.glob(self.dataset_dir +
-                                  self.splits['trainvalsplit'].val[idx][self.split_redundancy:] + depth_mode + '/*')[0]
+                                  self.splits['trainvalsplit']['val'][idx][self.split_redundancy:] + depth_mode + '/*')[0]
             cls_dir = self.dataset_dir + \
-                      self.splits['trainvalsplit'].val[idx][self.split_redundancy:] + '/scene.txt'
+                      self.splits['trainvalsplit']['val'][idx][self.split_redundancy:] + '/scene.txt'
         elif self.phase == 'test':
             rgb_dir = glob.glob(self.dataset_dir +
                                 self.splits['alltest'][idx][self.split_redundancy:] + '/image/*')[0]
@@ -88,12 +90,12 @@ class SunRgbdDataset(Dataset):
         elif self.phase == 'debug':
             # deal with filename with wildcard
             rgb_dir = glob.glob(self.dataset_dir +
-                                self.splits['trainvalsplit'].train[0][self.split_redundancy:] + '/image/*')[0]
+                                self.splits['trainvalsplit']['train'][0][self.split_redundancy:] + '/image/*')[0]
             # the inpainted depth:
             depth_dir = glob.glob(self.dataset_dir +
-                                  self.splits['trainvalsplit'].train[0][self.split_redundancy:] + depth_mode + '/*')[0]
+                                  self.splits['trainvalsplit']['train'][0][self.split_redundancy:] + depth_mode + '/*')[0]
             cls_dir = self.dataset_dir + \
-                      self.splits['trainvalsplit'].train[0][self.split_redundancy:] + '/scene.txt'
+                      self.splits['trainvalsplit']['train'][0][self.split_redundancy:] + '/scene.txt'
         rgb_image = Image.open(rgb_dir)  # np array of shape(H,W,C=3)
         depth = Image.open(depth_dir)  # np array of shape(H,W) if not hha_mode else shape(H,W,C=3)
         # sample = {'rgb': rgb_image, 'depth': depth_image}
@@ -102,10 +104,6 @@ class SunRgbdDataset(Dataset):
 
         cls_idx = np.int(self.cls_dict[cls_name]['label'])
         label = cls_idx
-
-        # if one_hot:
-        #     label = np.zeros(self.cls_count, dtype=np.float64)
-        #     label[cls_idx] = 1.0
 
         if self.transform:
             t1,t2,t3 = self.transform
@@ -117,7 +115,6 @@ class SunRgbdDataset(Dataset):
                 label = t3(label)
 
         sample = {'rgb': rgb_image, 'depth': depth, 'label': label}
-        # print('getting item:\n {}'.format(rgb_dir))
         return sample
 
 

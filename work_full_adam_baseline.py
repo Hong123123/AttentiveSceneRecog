@@ -2,7 +2,7 @@
 from dataset.nyud2_dataset import NYUD2Dataset
 from dataset.transforms import train_transform_hha as tr_hha, test_transform_hha as te_hha
 # from models.Atten_alex import AttenAlex
-from models.dynamic_alex import DAlex
+from models.dynamic_atten_alex import DoubleBranchAlex
 import config
 import torch
 from torch.utils.data import DataLoader
@@ -12,70 +12,6 @@ from tensorboardX import SummaryWriter
 from utility.train_utils import str2bool
 
 from Worker import Worker
-
-
-def load_pretrain_both_branch(model, pretrain_dir, device):
-    pre_ckpt = torch.load(pretrain_dir, map_location=device)
-
-    # load weight manually
-    # rather than model.load_state_dict(state_dict)3j
-    conv_idxmap = model.where_convs
-    key1 = None
-    key2 = None
-    for k, (key, value) in enumerate(pre_ckpt['state_dict'].items()):
-        # key = str.replace(key, 'module.', '')  # preprocssing]
-        if key.find('features') > -1:
-            # key = str.replace(key, 'features', 'r_features')  # transfering Places2Net features
-            if k < 10:
-                if k % 2 == 0:
-                    key1 = 'r_features.{}.weight'.format(conv_idxmap[k // 2])
-                    key2 = 'd_features.{}.weight'.format(conv_idxmap[k // 2])
-                else:
-                    key1 = 'r_features.{}.bias'.format(conv_idxmap[k // 2])
-                    key2 = 'd_features.{}.bias'.format(conv_idxmap[k // 2])
-        else:
-            target = 'classifier'  # transfering Places2Net classifiers
-            sp = key.split('.')
-            assert len(sp) == 3
-            if sp[0] == target:
-                key1 = 'r_other.1.{}.{}'.format(int(sp[1]) + 1, sp[2])
-                key2 = 'd_other.1.{}.{}'.format(int(sp[1]) + 1, sp[2])
-        if key1 in model.state_dict().keys():
-            print('copied: {}'.format(key))
-            model.state_dict()[key1].copy_(value)
-        if key2 in model.state_dict().keys():
-            print('copied: {}'.format(key))
-            model.state_dict()[key2].copy_(value)
-
-
-def load_pretrain_rgb_branch(model, pretrain_dir, device):
-    pre_ckpt = torch.load(pretrain_dir, map_location=device)
-
-    # load weight manually
-    # rather than model.load_state_dict(state_dict)
-    conv_idxmap = model.where_convs
-    for k, (key, value) in enumerate(pre_ckpt['state_dict'].items()):
-        # key = str.replace(key, 'module.', '')  # preprocssing]
-        if key.find('features') > -1:
-            # key = str.replace(key, 'features', 'r_features')  # transfering Places2Net features
-            if k < 10:
-                if k % 2 == 0:
-                    key = 'r_features.{}.weight'.format(conv_idxmap[k // 2])
-                else:
-                    key = 'r_features.{}.bias'.format(conv_idxmap[k // 2])
-        else:
-            target = 'classifier'  # transfering Places2Net classifiers
-            sp = key.split('.')
-            assert len(sp) == 3
-            if sp[0] == target:
-                key = 'r_other.1.{}.{}'.format(int(sp[1]) + 1, sp[2])
-        if key in model.state_dict().keys():
-            print('copied: {}'.format(key))
-            model.state_dict()[key].copy_(value)
-
-
-def load_pretrain_alex(model, pretrain_dir, device):
-    pass
 
 
 def main(args):
@@ -122,7 +58,7 @@ def main(args):
     cls_weight = train_data.cls_weight
 
     # define the model, loss function and optimizer
-    model = DAlex(train_data.cls_count, pretrain_dir=pretrain_dir).to(device)
+    model = DoubleBranchAlex(train_data.cls_count, pretrain_dir=pretrain_dir).to(device)
     criterion = nn.CrossEntropyLoss(weight=torch.tensor(cls_weight)).to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=0.1)
 

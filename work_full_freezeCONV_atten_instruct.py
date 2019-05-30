@@ -1,8 +1,7 @@
 # from dataset.sunrgbd_dataset import SunRgbdDataset
 from dataset.nyud2_dataset import NYUD2Dataset
 from dataset.transforms import train_transform_hha as tr_hha, test_transform_hha as te_hha
-# from models.Atten_alex import AttenAlex
-from models.dynamic_atten_alex import DoubleBranchAlex, AttenDBAlex, AttenDBAlexRelu
+from models.dynamic_Instructor import InstructorAlex, OnlyInstructorAlex
 import config
 import torch
 from torch.utils.data import DataLoader
@@ -14,24 +13,23 @@ from utility.train_utils import str2bool
 from Worker import Worker
 
 
+Network = InstructorAlex
+# Network = OnlyInstructorAlex
+
+
 def main(args, model=None):
     # hyperparameters
     log_root = args.log_root  # config.log_root  # '/mnt/old_hexin/log_atten'
     epochs = args.epochs  # 100
-
     pretrain_dir = args.pretrain_dir  # config.places_alex
     ckpt_dir = args.ckpt_dir  # '/mnt/old_hexin/log/2019-04-26_20:42:46/checkpoints/best/epochs:92.ckpt'
     baseline_dir = args.baseline_dir
-    raw_atten_no_relu_dir = args.raw_atten_no_relu_dir
-
     log_folder = args.log_folder
     lr = args.lr  # 3e-4
     l2 = args.l2  # 0.1
     atten_type = args.atten_type
-
-
-
-    # no_atten = str2bool(args.no_atten)
+    optim_type = args.optim_type
+    optim_load = str2bool(args.optim_load)
 
     # configure the gpu
     device = torch.device(args.device if args.device else 'cuda:1')
@@ -58,35 +56,44 @@ def main(args, model=None):
     data_args = nyudv2_data_args
 
     train_data, val_data, test_data = [dataset(*d_arg[0], **d_arg[1]) for d_arg in data_args]
-    train_loader = DataLoader(train_data, batch_size=125, shuffle=True, drop_last=False)  #, num_workers=1)
+    train_loader = DataLoader(train_data, batch_size=5, shuffle=True, drop_last=False, num_workers=5)
     val_loader = DataLoader(val_data, batch_size=1, shuffle=False, drop_last=False)  #, num_workers=1)
     test_loader = DataLoader(test_data, batch_size=1, shuffle=False, drop_last=False)  #, num_workers=1)
     classes = train_data.classes
     cls_weight = train_data.cls_weight
 
     # define the model, loss function and optimizer
-    # >>>> freeze grad
+    # >>>> don't freeze grad
     if model is None:
-        model = AttenDBAlexRelu(
-            train_data.cls_count,
-
-            pretrain_dir=pretrain_dir,
-            baseline_dir=baseline_dir,
-            raw_atten_no_relu_dir=raw_atten_no_relu_dir,
-
-            atten_type=atten_type, freeze_front=True, freeze_z=False, zero_z=True
-        )
-        # model = DAlex(train_data.cls_count, pretrain_dir=pretrain_dir, freeze_front=True)
+        # model = Network(train_data.cls_count, atten_topk=100, pretrain_dir=pretrain_dir, baseline_dir=baseline_dir,
+        #                 freeze_front=True)
+        # model = Network(train_data.cls_count, atten_topk=None, pretrain_dir=pretrain_dir, baseline_dir=baseline_dir,
+        #                 freeze_front=True)
+        # model = Network(train_data.cls_count, atten_topk=0.4, pretrain_dir=pretrain_dir, baseline_dir=baseline_dir,
+        #                 freeze_front=True, s_channel=4096)
+        model = Network(train_data.cls_count, atten_topk=0.4, pretrain_dir=pretrain_dir, baseline_dir=baseline_dir,
+                        freeze_front=True, s_channel=512)
 
     model.to(device)
 
-    # for cd in list(model.children())[:-1]:
-    #     for param in cd.parameters():
-    #         param.requires_grad=False
-    #     print('-'*10, 'freezing', '-'*10, cd)
-
     criterion = nn.CrossEntropyLoss(weight=torch.tensor(cls_weight)).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=l2)
+    if optim_type == 'adam':
+        optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=l2)
+        lr_scheduler = None
+        print('adam mode: hyperparams are lr:{0}, l2:{1}'.format(lr, l2))
+    else:  # optim_type == 'sgd':
+        if (not lr) and (not l2):
+            lr = 0.0001
+            l2 = 0.0005
+            print('sgd mode: hyperparams are fixed')
+        else:
+            if not lr:
+                lr = 0.0001
+            if not l2:
+                l2 = 0.0005
+            print('sgd mode: hyperparams are lr:{0}, l2:{1}'.format(lr, l2))
+        optimizer = optim.SGD(model.parameters(), lr=lr, weight_decay=l2, momentum=0.9)
+        lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=8000, gamma=0.1)
 
     # resume from last time if necessary:
     epoch_offset = 0
@@ -96,8 +103,10 @@ def main(args, model=None):
         ckpt = torch.load(dir, map_location=device)
         epoch_offset = ckpt['epoch_offset']
         step_offset = ckpt['step_offset']
-        model.load_state_dict(ckpt['state_dict'])
-        optimizer.load_state_dict(ckpt['optim'])
+        if ckpt_dir:
+            model.load_state_dict(ckpt['state_dict'])
+        if optim_load:
+            optimizer.load_state_dict(ckpt['optim'])
         print('resume from epoch: {}, step: {}'.format(epoch_offset - 1, step_offset - 1))
 
     # just before work: setup logger
@@ -107,6 +116,7 @@ def main(args, model=None):
     # work, the main loop!
     worker = Worker(model,
                     optimizer,
+                    lr_scheduler,
                     criterion,
                     epochs,
                     epoch_offset,
@@ -118,9 +128,8 @@ def main(args, model=None):
                     writer,
                     log_root,
                     log_folder,
-                    # save_first=False,
-                    # save_regular=False,
-                    # save_best=False
+                    save_num=2,
+                    save_best_num=3
                     )
 
     print(worker.work())
@@ -131,5 +140,4 @@ if __name__ == '__main__':
 
     args = get_parameters()
 
-    # model = AttenDAlex(10, atten_type='raw', freeze_front=True, freeze_z=True, zero_z=True)
     main(args)

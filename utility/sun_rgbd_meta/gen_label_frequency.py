@@ -2,32 +2,35 @@ import os
 from collections import OrderedDict
 import config
 
-rootDir = config.sunrgbd_root + '/SUNRGBD'
-target = 'scene.txt'
+# rootDir = config.sunrgbd_root
+rootDir = '/mnt/pub_workspace_2T/hong_data/SUNRGBD_root/SUNRGBD/'
+target = 'seg.mat'
+sceneName = 'scene.txt'
 o_dict = OrderedDict()
 
 ## calculate percentage
-print('formulating percentage')
-num = 0
-for _,_,fileList in os.walk(rootDir):
-    for file_name in fileList:
-        if file_name == target:
-            num += 1
+# print('formulating percentage')
+# num = 0
+# for _,_,fileList in os.walk(rootDir):
+#     for file_name in fileList:
+#         if file_name == target:
+#             num += 1
 
 index = 0
 count = 0
 for base_dir,_,fileList in os.walk(rootDir):
     for file_name in fileList:
-        if file_name == target:
+        if file_name == sceneName:
             count += 1
-            with open(os.path.join(base_dir,file_name), 'r') as file:
+            with open(os.path.join(base_dir, sceneName), 'r') as file:
                 scene=file.read()
             if scene not in o_dict.keys():
-                o_dict[scene] = {'label': index, 'N': 0}
+                o_dict[scene] = {'label': index, 'N': 1}
                 index += 1
-                print('formulating dictionary {:.2%}'.format(count/num))
+                # print('formulating dictionary {:.2%}'.format(count/num))
             else:
                 o_dict[scene]['N'] += 1
+            print('formulating dictionary {}'.format(count))
 
 N = count
 N_max = 0

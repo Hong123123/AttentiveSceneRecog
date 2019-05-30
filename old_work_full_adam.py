@@ -1,7 +1,7 @@
 from dataset.sunrgbd_dataset import SunRgbdDataset
 from dataset.nyud2_dataset import NYUD2Dataset
 from dataset.transforms import train_transform_hha as tr_hha, test_transform_hha as te_hha
-from models.Atten_alex import AttenAlex
+from models.duplicated_Atten_alex import AttenAlex
 import config
 import torch
 from torch.utils.data import DataLoader
@@ -71,10 +71,6 @@ def load_pretrain_rgb_branch(model, pretrain_dir, device):
         if key in model.state_dict().keys():
             print('copied: {}'.format(key))
             model.state_dict()[key].copy_(value)
-
-
-def load_pretrain_alex(model, pretrain_dir, device):
-    pass
 
 
 def main(args):

@@ -1,6 +1,6 @@
 from dataset.sunrgbd_dataset import SunRgbdDataset
 from dataset.transforms import train_transform_hha as tr_hha
-from models.Atten_alex import AttenAlex
+from models.duplicated_Atten_alex import AttenAlex
 import config
 import torch
 from torch.utils.data import DataLoader
@@ -108,11 +108,6 @@ def main(args):
                     log_root,
                     log_folder,
                     )
-                    # save=True,
-                    # save_best=True,
-                    # debug_mode=True,
-                    # debug_batch=2,
-                    # )
 
     print(worker.work())
 

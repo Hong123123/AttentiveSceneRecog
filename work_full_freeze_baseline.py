@@ -2,7 +2,7 @@
 from dataset.nyud2_dataset import NYUD2Dataset
 from dataset.transforms import train_transform_hha as tr_hha, test_transform_hha as te_hha
 # from models.Atten_alex import AttenAlex
-from models.dynamic_alex import DAlex, AttenDAlex
+from models.dynamic_atten_alex import DoubleBranchAlex, AttenDBAlex
 import config
 import torch
 from torch.utils.data import DataLoader
@@ -65,7 +65,7 @@ def main(args, model=None):
         #     train_data.cls_count, pretrain_dir=pretrain_dir, baseline_dir=baseline_dir,
         #     atten_type='raw', freeze_front=True, freeze_z=False, zero_z=True
         # )
-        model = DAlex(train_data.cls_count, pretrain_dir=pretrain_dir, freeze_front=True)
+        model = DoubleBranchAlex(train_data.cls_count, pretrain_dir=pretrain_dir, freeze_front=True)
 
     model.to(device)
 
@@ -80,8 +80,9 @@ def main(args, model=None):
     # resume from last time if necessary:
     epoch_offset = 0
     step_offset = 0
-    if ckpt_dir:
-        ckpt = torch.load(ckpt_dir, map_location=device)
+    if ckpt_dir or baseline_dir:
+        dir = ckpt_dir if ckpt_dir else baseline_dir
+        ckpt = torch.load(dir, map_location=device)
         epoch_offset = ckpt['epoch_offset']
         step_offset = ckpt['step_offset']
         model.load_state_dict(ckpt['state_dict'])
@@ -105,10 +106,7 @@ def main(args, model=None):
                     device,
                     writer,
                     log_root,
-                    log_folder,
-                    # save_first=False,
-                    # save_regular=False,
-                    # save_best=False
+                    log_folder
                     )
 
     print(worker.work())

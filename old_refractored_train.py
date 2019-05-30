@@ -1,6 +1,6 @@
 from dataset.sunrgbd_dataset import SunRgbdDataset
 from dataset.transforms import train_transform_hha as tr_hha
-from models.Atten_alex import AttenAlex
+from models.duplicated_Atten_alex import AttenAlex
 from utility.train_utils import save_helper
 import config
 import torch

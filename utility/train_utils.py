@@ -29,6 +29,7 @@ def get_parameters():
     parser.add_argument('--log_root', type=str, default=None)
     parser.add_argument('--epochs', type=int, default=100)
 
+    # one dir at the same time
     parser.add_argument('--pretrain_dir', type=str, default=None)
     parser.add_argument('--baseline_dir', type=str, default=None)
     parser.add_argument('--ckpt_dir', type=str, default=None)
@@ -40,13 +41,20 @@ def get_parameters():
     parser.add_argument('--split', type=str, default='train')
     parser.add_argument('--device', type=str, default='cuda:1')
 
+    # optimizer: adam or sgd
+    parser.add_argument('--optim_type', type=str, default='adam')
+    parser.add_argument('--optim_load', type=str, default='true')
+
     # params have default value
-    parser.add_argument('--lr', type=float, default=1e-3)
-    parser.add_argument('--l2', type=float, default=1e-1)
+    parser.add_argument('--lr', type=float, default=None)
+    parser.add_argument('--l2', type=float, default=None)
 
     parser.add_argument('--eval_inteval_epoch', type=int, default=1)
     parser.add_argument('--log_folder', type=str, default=None)
     parser.add_argument('--save_inteval_epoch', type=int, default=None)
+
+    parser.add_argument('--save_num', type=int, default=None)
+    parser.add_argument('--save_best_num', type=int, default=None)
 
     # parse
     args = parser.parse_args()
@@ -61,6 +69,10 @@ def get_parameters():
     if args.atten_type:
         if args.atten_type not in ['raw', 'multi']:
             raise ValueError('Unexpected --atten_type value')
+
+    if args.optim_type:
+        if args.optim_type not in ['sgd', 'adam']:
+            raise ValueError('Unexpected --optim_type value')
 
     return args
 
