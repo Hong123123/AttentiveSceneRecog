@@ -7,7 +7,7 @@ import config
 sample_sceneTypes
 sample_sceneIndices
 scene_names
-scene_rat_10
+scene_weight_10
 scene_map
 '''
 
@@ -29,7 +29,8 @@ save_folder = config.root + '/utility/nyud2_meta'
 sample_sceneTypes_dir = save_folder + '/sample_sceneTypes.json'
 sample_sceneIndices_dir = save_folder + '/sample_sceneIndices.json'
 scene_names_dir = save_folder + '/scene_names.json'
-scene_rat_10_dir = save_folder + '/scene_rat_10.json'
+# scene_rat_10_dir = save_folder + '/scene_weight_10.json'
+scene_weight_10_dir = save_folder + '/scene_weight_10.json'
 scene_map_dir = save_folder + '/scene_map.json'
 # <<<<<<
 
@@ -70,15 +71,21 @@ if __name__ == '__main__':  # generate meta data
     ]
     save_json(scene_map, scene_map_dir)
 
-    # calculate cls frequency with common 10
-    scene_fres_10 = np.zeros((10,), dtype=np.int)
+    # calculate cls frequency/weight with common 10
+    scene_num_10 = np.zeros((10,), dtype=np.int)
     for idx in sample_sceneIndices:
-        scene_fres_10[scene_map[idx]] += 1
+        scene_num_10[scene_map[idx]] += 1
 
-    scene_rat_10 = scene_fres_10 / np.sum(scene_fres_10)
-    save_json(scene_rat_10.tolist(), scene_rat_10_dir)
+    # scene_weight_10 = scene_num_10 / np.sum(scene_num_10)
+    # save_json(scene_weight_10.tolist(), scene_rat_10_dir)
+    N_min = scene_num_10.min()
+    N_max = scene_num_10.max()
+    delta = 0.01
+    scene_weight_10 = [(n - N_min + delta) / (N_max - N_min) for n in scene_num_10]  # no '-1' here !!!!!!!!!
+    save_json(scene_weight_10, scene_weight_10_dir)
 
-    print('fres with common 10:', scene_fres_10)
+    print('fres with common 10:', scene_num_10)
+    print('weight with common 10:', scene_weight_10)
     print('fres with common 9:', scene_fres[common9])
     print('names with common 9:', scene_names[common9])
     print('names of others:', others)
@@ -88,5 +95,6 @@ else:  # __name__ != '__main__':
     sample_sceneTypes = load_json(sample_sceneTypes_dir)
     sample_sceneIndices = load_json(sample_sceneIndices_dir)
     scene_names = load_json(scene_names_dir)
-    scene_rat_10 = load_json(scene_rat_10_dir)
+    # scene_weight_10 = load_json(scene_rat_10_dir)
+    scene_weight_10 = load_json(scene_weight_10_dir)
     scene_map = load_json(scene_map_dir)

@@ -11,10 +11,13 @@ sunrgbd_root = '/mnt/pub_workspace_2T/hong_data/SUNRGBD_root'
 
 sunrgbd_dir = '/mnt/pub_workspace_2T/hong_data/SUNRGBD_root/SUNRGBD_HHA'
 
-sunrgbd_label_dict_dir = root + '/utility/sun_rgbd_meta/make_9504/sunrgbd_label_fre_dict_Total9504_max1084_min169.json'
+sunrgbd_label_dict_dir = \
+    root + '/utility/sun_rgbd_meta/make_9504/sunrgbd_label_weight_dict_Total9504_max1084_min169.json'
+
 # <<<
 
 # Nyud v2 config
 # >>>
 nyud2_dir = '/mnt/pub_workspace_2T/hong_data/SUNRGBD_root/SUNRGBD_HHA/kv1/NYUdata'
+# nyud2_dir = '/mnt/pub_workspace_2T/hong_data/SUNRGBD_root/SUNRGBD/kv1/NYUdata'
 # <<<

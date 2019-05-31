@@ -5,7 +5,7 @@ import scipy.io
 import json
 import glob
 from utility.nyud2_meta.make_common_10 import sample_sceneTypes, sample_sceneIndices,\
-    scene_names, scene_rat_10, scene_map
+    scene_names, scene_weight_10, scene_map
 
 
 class NYUD2Dataset(Dataset):
@@ -22,7 +22,7 @@ class NYUD2Dataset(Dataset):
         assert phase in ['train', 'val', 'test', 'debug']
         self.phase = phase
         self.hha_mode = hha_mode
-        self.cls_weight = scene_rat_10
+        self.cls_weight = scene_weight_10
         self.classes = scene_names
 
         self.transform = transform

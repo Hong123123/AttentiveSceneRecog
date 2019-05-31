@@ -41,13 +41,23 @@ N_min = 99999
 min_cls = ''
 
 # find min max of Ns
+total = 0
 for cls, dic in o_dict.items():
     num = dic['N']
+    total += num
     N_max = num if num > N_max else N_max
     N_min, min_cls = (num, cls) if num < N_min else (N_min, min_cls)
 
 delta = 0.01
-out_dict = {k:{'label': v['label'], 'N':v['N'], 'frequency': (v['N']-N_min+delta)/(N_max-N_min)} for k,v in o_dict.items()}
+out_dict = {
+    k: {
+        'label': v['label'],
+        'N': v['N'],
+        'frequency': v['N']/total,
+        'weight': (v['N']-N_min+delta)/(N_max-N_min)  # no '-1' here !!!!!!!!!!!!!!!!!!!!!
+}
+    for k, v in o_dict.items()
+}
 
 save_dict = out_dict
 
@@ -57,7 +67,7 @@ print('min_cls', min_cls)
 # save as json
 # https://stackoverflow.com/a/7100202
 import json
-sfile = os.path.join(os.getcwd(), 'sunrgbd_label_fre_dict_Total{}_max{}_min{}.json'.format(N, N_max, N_min))
+sfile = os.path.join(os.getcwd(), 'sunrgbd_label_weight_dict_Total{}_max{}_min{}.json'.format(N, N_max, N_min))
 print('saving dictionary at: '+sfile)
 with open(sfile, '+w') as jfile:
     json.dump(save_dict, jfile)

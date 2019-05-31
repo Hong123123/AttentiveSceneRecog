@@ -1,5 +1,9 @@
 from utility.train_utils import save_helper
 import torch
+import numpy as np
+from pycm import *
+
+No_output = False
 
 
 class Worker():
@@ -86,36 +90,55 @@ class Worker():
 
         return running_loss, running_acc, num_images
 
-    def validate(self, loader, mode='Validate', if_log=True):
+    def test(self, loader, mode='Test', if_log=True):
+        val_acc, is_best = self.validate(loader, mode, if_log)
+
+    def validate(self, loader, mode='Validate', if_log=True, if_confusion_matrix=False):
         # validate:
         print(mode + ' at epoch{}'.format(self.abs_epoch))
         self.model.eval()  # switch to eval mode
         running_val_acc = 0
         val_num = 0
+
+        preds = []
+        actus = []
         for step, batch in enumerate(iter(loader)):
             with torch.no_grad():
                 rgb, depth, label = batch['rgb'].to(self.device), batch['depth'].to(self.device), batch['label'].to(
                     self.device)
 
                 o = self.model(rgb, depth)
-                correct = torch.argmax(o, dim=1) == label
+                pred = torch.argmax(o, dim=1)
+                correct = pred == label
+
+                preds.append(*list(pred.view(-1).cpu().numpy()))
+                actus.append(*list(label.view(-1).cpu().numpy()))
+
                 correct_num = torch.sum(correct).item()
                 val_num += rgb.size(0)
                 running_val_acc += correct_num
 
         val_acc = running_val_acc / val_num
-        print(val_acc)
+        cm = ConfusionMatrix(actual_vector=actus, predict_vector=preds)
+        f = lambda m: [[m[i][j] for j in range(len(m.keys()))] for i in range(len(m.keys()))]
+        matrix, normalized = np.array(f(cm.matrix)), np.array(f(cm.normalized_matrix))
+        val_avg_confusion = np.trace(normalized) / normalized.shape[0]
+        self.confusion_dict = dict(matrix=matrix.tolist(), normalized=normalized.tolist())
 
-        is_best = val_acc >= self.best_prec1
-        self.best_prec1 = val_acc if is_best else self.best_prec1
+        is_best = val_avg_confusion >= self.best_prec1
+        self.best_prec1 = val_avg_confusion if is_best else self.best_prec1
 
         if if_log:
             self.writer.add_scalar(mode + '/Accu(epochs)', val_acc, self.abs_epoch)
             self.writer.add_scalar(mode + '/Best_accu(epochs)', self.best_prec1, self.abs_epoch)
-        return val_acc, is_best
+            self.writer.add_scalar(mode + '/Average Confusion', val_avg_confusion, self.abs_epoch)
 
-    def save_switch(self, val_acc, is_best):
+        print('acc:', val_acc, 'confusion:', val_avg_confusion, 'acc_is_best:', is_best)
+        return val_acc, val_avg_confusion, is_best
+
+    def save_switch(self, val_acc, val_avg_confusion, is_best):
         state_dict = self.model.state_dict()
+        confusion_dict = self.confusion_dict
         arch = self.model._get_name()
 
         # ckpt ref: https://github.com/CuriousAI/mean-teacher/blob/master/pytorch/main.py
@@ -131,8 +154,16 @@ class Worker():
         if is_best and self.save_best:
             print('saving best model at epoch: {}'.format(self.abs_epoch))
             best_dir = self.log_root + '/{}/checkpoints/best'.format(self.log_folder)
+            best_confusion_dir = self.log_root + '/{}/confusion/best'.format(self.log_folder)
+
             save_name = '/val_acc_of_{}_at_epoch:{}.ckpt'.format(val_acc, self.abs_epoch)
-            save_helper(ckpt, best_dir, save_name, maxnum=self.save_best_num)
+            save_confusion_name = '/val_avg_confusion_of_{}_at_epoch:{}.json'.format(val_avg_confusion, self.abs_epoch)
+            # save_helper(ckpt, best_dir, save_name, maxnum=self.save_best_num)
+            save_helper(ckpt, best_dir, save_name,
+                        maxnum=self.save_num,
+                        confusion_matrix=confusion_dict,
+                        confusion_basename=best_confusion_dir,
+                        confusion_filename=save_confusion_name)
 
         if not self.save_regular:
             return
@@ -140,16 +171,22 @@ class Worker():
         # if is_save:
         print('saving at epoch: {}'.format(self.abs_epoch))
         save_dir = self.log_root + '/{}/checkpoints'.format(self.log_folder)
+        save_confusion_dir = self.log_root + '/{}/confusion'.format(self.log_folder)
+
         save_name = '/val_acc_of_{}_at_epoch:{}.ckpt'.format(val_acc, self.abs_epoch)
-        save_helper(ckpt, save_dir, save_name, maxnum=self.save_num)
+        save_confusion_name = '/val_avg_confusion_of_{}_at_epoch:{}.json'.format(val_avg_confusion, self.abs_epoch)
+        save_helper(ckpt, save_dir, save_name,
+                    maxnum=self.save_num,
+                    confusion_matrix=confusion_dict,
+                    confusion_basename=save_confusion_dir,
+                    confusion_filename=save_confusion_name)
 
     def work(self):
         # initial validate
-        val_acc, is_best = self.validate(self.val_loader)
-        print('val_acc: {}, is_best: {}'.format(val_acc, is_best))
+        val_acc, val_avg_confusion, is_best = self.validate(self.val_loader)
         # save
         if self.save_first:
-            self.save_switch(val_acc, is_best)
+            self.save_switch(val_acc, val_avg_confusion, is_best)
 
         for epoch in range(self.epochs):
             self.abs_epoch += 1
@@ -167,14 +204,14 @@ class Worker():
             self.writer.add_scalar('Train/Accu(epochs)', epoch_acc, self.abs_epoch)
 
             # validate
-            val_acc, is_best = self.validate(self.val_loader)
-            print('val_acc: {}, is_best: {}'.format(val_acc, is_best))
+            val_acc, val_avg_confusion, is_best = self.validate(self.val_loader)
 
             # save
-            self.save_switch(val_acc, is_best)
+            self.save_switch(val_acc, val_avg_confusion, is_best)
 
         # test
-        test_acc, _ = self.validate(self.test_loader, mode='Test')
+        test_acc, test_avg_confusion, _ = self.validate(self.test_loader, mode='Test')
         print('test accuracy', test_acc)
-        return test_acc
+        print('test avg confusion', test_acc)
+        return test_acc, test_avg_confusion
 

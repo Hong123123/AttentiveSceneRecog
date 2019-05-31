@@ -2,23 +2,45 @@ import config
 import os
 import torch
 import argparse
+import json
 
 
-def save_helper(file, basename, filename, maxnum=-1):
+def save_helper(ckpt_obj, basename, filename, maxnum=-1,
+                confusion_matrix=None, confusion_basename=None, confusion_filename=None):
+    confused = None
+    if confusion_matrix:
+        assert confusion_basename
+        assert confusion_filename
+        confused = True
+
     os.makedirs(basename) if not os.path.exists(basename) else ''
-    torch.save(file, basename + filename)
+    if confused:
+        os.makedirs(confusion_basename) if not os.path.exists(confusion_basename) else ''
+
+    torch.save(ckpt_obj, basename + filename)
+    if confused:
+        with open(confusion_basename + confusion_filename, 'w+') as c_file:
+            json.dump(confusion_matrix, c_file)
+
     if maxnum != -1:  # define how much files would be kept in the folder
-        exfiles = {int(exfile.replace(':', '.').split('.')[-2]): exfile
+        exfiles = {int(exfile.replace(':', '.').split('.')[-2]): exfile  # epoch_num: file names
                    for exfile in os.listdir(basename) if os.path.isfile(os.path.join(basename, exfile))}
+        if confused:
+            exfiles_confusion = {int(exfile.replace(':', '.').split('.')[-2]): exfile  # epoch_num: file names
+                       for exfile in os.listdir(confusion_basename) if os.path.isfile(os.path.join(confusion_basename, exfile))}
         if len(exfiles) >= maxnum:
             remove_keys = sorted(exfiles.keys())[0:-maxnum]
             for rm_key in remove_keys:
                 rm_name = os.path.join(basename, exfiles[rm_key])
                 os.remove(rm_name)
 
+                if confused:
+                    rm_confusion_name = os.path.join(confusion_basename, exfiles_confusion[rm_key])
+                    os.remove(rm_confusion_name)
+
 
 def str2bool(v):
-    return v.lower() in ('true')
+    return v.lower() in 'true'
 
 
 def get_parameters():

@@ -13,7 +13,7 @@ class SunRgbdDataset(Dataset):
         :param data_dir: directory with the dataset
         :param transform: Transformation function
         :param label_dict_dir: dir to dictionary of labels which looks like:
-        {'label_string': {'label':label_idx, 'N': label_occurence, 'frequency':label_frequency}}
+        {'label_string': {'label':label_idx, 'N': label_occurence, 'weight':label_weight}}
         dataset for SUN RGB-D {'image': PIL, 'depth': PIL, 'label': np.1darray}
         """
         self.dataset_dir = data_dir
@@ -47,7 +47,7 @@ class SunRgbdDataset(Dataset):
             self.cls_dict = json.load(j)
         self.cls_count = len(self.cls_dict.keys())
         self.classes = list(self.cls_dict.keys())
-        self.cls_weight = [sample_dict['frequency'] for scene, sample_dict in self.cls_dict.items()]
+        self.cls_weight = [sample_dict['weight'] for scene, sample_dict in self.cls_dict.items()]
 
     def __len__(self):
         if self.phase == 'train':  # all train: no val

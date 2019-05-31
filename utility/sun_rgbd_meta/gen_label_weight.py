@@ -42,7 +42,7 @@ for cls, dic in o_dict.items():
     N_min, min_cls = (num, cls) if num < N_min else (N_min, min_cls)
 
 delta = 0.01
-out_dict = {k:{'label': v['label'], 'N':v['N'], 'frequency': (v['N']-N_min+delta)/(N_max-N_min)} for k,v in o_dict.items()}
+out_dict = {k:{'label': v['label'], 'N':v['N'], 'frequency': (v['N']-N_min+delta)/(N_max-N_min)} for k,v in o_dict.items()}  # typo: 'frequency' should be 'weight'
 
 save_dict = out_dict
 
